@@ -19,7 +19,7 @@ pip install -r /path/to/requirements.txt
 ### Usage:
 Run the command:
 ```console
-python exeparser.py path_to_your_exe_file.exe
+python exeparser.py /path/to/your/file.exe
 ```
 or if you need details:
 ```console

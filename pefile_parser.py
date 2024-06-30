@@ -47,50 +47,35 @@ class PEFile:
         try:
             f.seek(self.e_lfanew)
             self.pe_header = f.read(24)
-
             # 4s - stands for 4 character string (expected b'PE\x00\x00')
             # 2H - next 4 bytes are interpreted as two 16-bit unsigned ints (x2)
             # 3I - next 12 bytes are interpreted as three 32-bit unsigned ints
-            self.signature, self.machine, self.number_of_sections, self.time_date_stamp, \
-                self.pointer_to_symbol_table, self.number_of_symbols, self.size_of_optional_header, \
-                self.characteristics = struct.unpack('4s2H3I2H', self.pe_header)
+            self.pe_headers = list(struct.unpack('4s2H3I2H', self.pe_header))
 
         except struct.error as e:
             print(f"Error unpacking PE header: {e}")
 
     def _parse_optional_header(self, f):
         try:
-            self.optional_header = f.read(self.size_of_optional_header)
-
+            self.optional_header = f.read(self.pe_headers[6])
             # B - 8-bit unsigned int (unsigned char)
-            self.magic, self.major_linker_version, self.minor_linker_version, self.size_of_code, \
-                self.size_of_initialized_data, self.size_of_uninitialized_data, \
-                self.address_of_entry_point, self.base_of_code, self.base_of_data, self.image_base, \
-                self.section_alignment, self.file_alignment, self.major_os_version, self.minor_os_version, \
-                self.major_image_version, self.minor_image_version, self.major_subsystem_version, \
-                self.minor_subsystem_version, self.win32_version_value, self.size_of_image, \
-                self.size_of_headers, self.checksum, self.subsystem, self.dll_characteristics, \
-                self.size_of_stack_reserve, self.size_of_stack_commit, self.size_of_heap_reserve, \
-                self.size_of_heap_commit, self.loader_flags, self.number_of_rva_and_sizes = \
-                struct.unpack('H2B5I6H6I2H8I', self.optional_header[:96])
+            self.optional_headers = list(struct.unpack('H2B5I6H6I2H8I', self.optional_header[:96]))
 
         except struct.error as e:
             print(f"Error unpacking optional header: {e}")
 
     def _parse_sections(self, f):
         try:
-            for i in range(self.number_of_sections):
+            for i in range(self.pe_headers[2]):
                 # Each section header takes exactly 40 bytes
                 section = f.read(40)
-                name, virtual_size, virtual_address, size_of_raw_data, pointer_to_raw_data, \
-                    pointer_to_relocations, pointer_to_line_numbers, number_of_relocations, \
-                    number_of_line_numbers, characteristics = struct.unpack('8s6I2HI', section)
+                section_params = list(struct.unpack('8s6I2HI', section))
                 self.sections.append({
-                    'Name': name.decode(errors='ignore').strip(),
-                    'VirtualAddress': virtual_address,
-                    'VirtualSize': virtual_size,
-                    'RawSize': size_of_raw_data,
-                    'Characteristics': characteristics
+                    'Name': section_params[0].decode(errors='ignore').strip(),
+                    'VirtualAddress': section_params[2],
+                    'VirtualSize': section_params[1],
+                    'RawSize': section_params[3],
+                    'Characteristics': section_params[9]
                 })
         except struct.error as e:
             print(f"Error unpacking section header: {e}")
@@ -109,34 +94,30 @@ class PEFile:
             print(f"Magic: {self.e_magic}")
 
             print("\nPE Header:")
-            print(f"  Number of Sections: {self.number_of_sections}")
-            print(f"  Size of Optional Header: {self.size_of_optional_header}")
-            print(f"  Characteristics: {hex(self.characteristics)}")
-            print(f"  Time Date Stamp: {self.time_date_stamp}")
+            print(f"  Number of Sections: {self.pe_headers[2]}")
+            print(f"  Size of Optional Header: {self.pe_headers[6]}")
+            print(f"  Characteristics: {hex(self.pe_headers[7])}")
+            print(f"  Time Date Stamp: {self.pe_headers[3]}")
 
             if show_optional:
-                # print("\nOptional Header:")
-                # for i, field in enumerate(self.optional_header_fields):
-                #     print(f"  Field {i}: {field}")
                 print("\nOptional Header:")
-                print(f"  Address of Entry Point: {hex(self.address_of_entry_point)}")
-                print(f"  Image Base: {hex(self.image_base)}")
-                print(f"  Section Alignment: {self.section_alignment}")
-                print(f"  File Alignment: {self.file_alignment}")
-                print(f"  Size of Image: {self.size_of_image}")
-                print(f"  Size of Headers: {self.size_of_headers}")
-                print(f"  Subsystem: {self.subsystem}")
-                print(f"  Dll Characteristics: {hex(self.dll_characteristics)}")
-                print(f"  Number of Rva and Sizes: {self.number_of_rva_and_sizes}")
+                print(f"  Address of Entry Point: {hex(self.optional_headers[6])}")
+                print(f"  Image Base: {hex(self.optional_headers[9])}")
+                print(f"  Section Alignment: {self.optional_headers[10]}")
+                print(f"  File Alignment: {self.optional_headers[11]}")
+                print(f"  Size of Image: {self.optional_headers[19]}")
+                print(f"  Size of Headers: {self.optional_headers[20]}")
+                print(f"  Subsystem: {self.optional_headers[22]}")
+                print(f"  Dll Characteristics: {hex(self.optional_headers[23])}")
+                print(f"  Number of Rva and Sizes: {self.optional_headers[29]}")
 
             if show_directories:
                 print("\nData Directories:")
-
                 # first 96 bytes have already been unpacked earlier for other fields
                 # number_of_rva_and_sizes contains the number of data directories
                 # each data directory is 8 bytes (4 bytes for virtual address and 4 bytes for size)
-                data_directories = self.optional_header[96:96 + 8 * self.number_of_rva_and_sizes]
-                for i in range(self.number_of_rva_and_sizes):
+                data_directories = self.optional_header[96:96 + 8 * self.optional_headers[29]]
+                for i in range(self.optional_headers[29]):
                     virtual_address, size = struct.unpack_from('II', data_directories, i * 8)
                     print(f"  Directory {i}: VirtualAddress: {hex(virtual_address)}, Size: {size}")
 

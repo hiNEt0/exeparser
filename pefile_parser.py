@@ -86,7 +86,7 @@ class PEFile:
                     pointer_to_relocations, pointer_to_line_numbers, number_of_relocations, \
                     number_of_line_numbers, characteristics = struct.unpack('8s6I2HI', section)
                 self.sections.append({
-                    'Name': name.decode().strip(),
+                    'Name': name.decode(errors='ignore').strip(),
                     'VirtualAddress': virtual_address,
                     'VirtualSize': virtual_size,
                     'RawSize': size_of_raw_data,
